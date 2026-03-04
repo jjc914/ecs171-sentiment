@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sentiment Model Comparison</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+    <div class="hero">
+        <h1 class="logo">Sentiment Model Comparison</h1>
+        <p class="tagline">Comparing the Naive Bayes, Encoder-only, and BERT models for sentiment analysis.</p>
+
+        <form class="search-wrap" onsubmit="analyze(event)">
+            <div class="search-bar">
+                <textarea
+                    id="input-text"
+                    placeholder="Text here..."
+                    autocomplete="off"
+                    autofocus
+                    rows="1"
+                ></textarea>
+            </div>
+            <button id="analyze-btn" type="submit">Analyze</button>
+        </form>
+    </div>
+
+    <div class="results-section" id="results-section">
+        <div class="results-grid">
+            <div class="model-card" id="card-naive_bayes" data-key="naive_bayes">
+                <div class="card-header">
+                    <span class="chip" id="chip-naive_bayes"></span>
+                    <span class="model-name" id="name-naive_bayes">Naive Bayes</span>
+                </div>
+                <div class="verdict" id="label-naive_bayes">—</div>
+                <div class="confidence-bar-wrap">
+                    <div class="confidence-bar" id="bar-naive_bayes"></div>
+                </div>
+                <div class="score" id="score-naive_bayes"></div>
+                <div class="loading" id="loading-naive_bayes">
+                    <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+                </div>
+                <div class="token-heatmap" id="heatmap-naive_bayes"></div>
+            </div>
+
+            <div class="model-card" id="card-encoder" data-key="encoder">
+                <div class="card-header">
+                    <span class="chip" id="chip-encoder"></span>
+                    <span class="model-name" id="name-encoder">Encoder-only</span>
+                </div>
+                <div class="verdict" id="label-encoder">—</div>
+                <div class="confidence-bar-wrap">
+                    <div class="confidence-bar" id="bar-encoder"></div>
+                </div>
+                <div class="score" id="score-encoder"></div>
+                <div class="loading" id="loading-encoder">
+                    <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+                </div>
+                <div class="token-heatmap" id="heatmap-encoder"></div>
+            </div>
+
+            <div class="model-card" id="card-bert" data-key="bert">
+                <div class="card-header">
+                    <span class="chip" id="chip-bert"></span>
+                    <span class="model-name" id="name-bert">Fine-tuned BERT</span>
+                </div>
+                <div class="verdict" id="label-bert">—</div>
+                <div class="confidence-bar-wrap">
+                    <div class="confidence-bar" id="bar-bert"></div>
+                </div>
+                <div class="score" id="score-bert"></div>
+                <div class="loading" id="loading-bert">
+                    <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+                </div>
+                <div class="token-heatmap" id="heatmap-bert"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SENTIMENT_CLASS = {
+            pos: "positive",
+            neg: "negative",
+            neu: "neutral",
+        };
+
+        function sentimentKey(label) {
+            const l = label.toLowerCase();
+            if (l.includes("pos")) return "pos";
+            if (l.includes("neg")) return "neg";
+            return "neu";
+        }
+
+        const MODEL_KEYS = ["naive_bayes", "encoder", "bert"];
+
+        function reset() {
+            MODEL_KEYS.forEach(key => {
+                document.getElementById(`card-${key}`).className = "model-card";
+                document.getElementById(`label-${key}`).textContent = "—";
+                document.getElementById(`score-${key}`).textContent = "";
+                document.getElementById(`chip-${key}`).className = "chip";
+                document.getElementById(`chip-${key}`).textContent = "";
+                document.getElementById(`bar-${key}`).style.width = "0%";
+                document.getElementById(`bar-${key}`).className = "confidence-bar";
+                document.getElementById(`loading-${key}`).style.display = "flex";
+                document.getElementById(`heatmap-${key}`).innerHTML = "";
+            });
+            document.getElementById("results-section").classList.add("visible");
+        }
+
+        function renderHeatmap(containerId, attributions) {
+            const el = document.getElementById(containerId);
+            el.innerHTML = "";
+            if (!attributions || !attributions.length) return;
+
+            const maxAbs = Math.max(...attributions.map(a => Math.abs(a.weight))) || 1;
+            attributions.forEach(({ token, weight }) => {
+                const span = document.createElement("span");
+                span.className = "heat-token";
+                span.textContent = token;
+                const t = weight / maxAbs;   // -1 … +1
+                if (t >= 0) {
+                    span.style.background = `rgba(34,197,94,${(t * 0.75).toFixed(2)})`;
+                } else {
+                    span.style.background = `rgba(239,68,68,${(-t * 0.75).toFixed(2)})`;
+                }
+                span.title = `${weight >= 0 ? "+" : ""}${weight.toFixed(4)}`;
+                el.appendChild(span);
+            });
+        }
+
+        function populateCard(key, result) {
+            document.getElementById(`loading-${key}`).style.display = "none";
+
+            if (!result || !result.label) {
+                document.getElementById(`label-${key}`).textContent = "N/A";
+                return;
+            }
+
+            const skey = sentimentKey(result.label);
+            const cls  = SENTIMENT_CLASS[skey];
+            const pct  = result.score != null ? (result.score * 100).toFixed(1) : null;
+
+            document.getElementById(`label-${key}`).textContent = result.label;
+            document.getElementById(`score-${key}`).textContent = pct ? `${pct}% confidence` : "";
+
+            const chip = document.getElementById(`chip-${key}`);
+            chip.textContent = result.label;
+            chip.className = `chip ${cls}`;
+
+            const bar = document.getElementById(`bar-${key}`);
+            bar.className = `confidence-bar ${cls}`;
+            setTimeout(() => { bar.style.width = pct ? `${pct}%` : "0%"; }, 50);
+
+            document.getElementById(`card-${key}`).classList.add(cls);
+
+            renderHeatmap(`heatmap-${key}`, result.attributions);
+        }
+
+        // Auto-grow textarea
+        const textarea = document.getElementById("input-text");
+        textarea.addEventListener("input", () => {
+            textarea.style.height = "auto";
+            textarea.style.height = textarea.scrollHeight + "px";
+        });
+        textarea.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                document.getElementById("analyze-btn").click();
+            }
+        });
+
+        async function analyze(e) {
+            e.preventDefault();
+            const text = document.getElementById("input-text").value.trim();
+            if (!text) return;
+
+            const btn = document.getElementById("analyze-btn");
+            btn.disabled = true;
+
+            reset();
+
+            try {
+                const response = await fetch("/analyze", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ text }),
+                });
+                const data = await response.json();
+
+                MODEL_KEYS.forEach(key => populateCard(key, data.results[key]));
+            } catch (err) {
+                MODEL_KEYS.forEach(key => {
+                    document.getElementById(`loading-${key}`).style.display = "none";
+                    document.getElementById(`label-${key}`).textContent = "Error";
+                });
+            }
+
+            btn.disabled = false;
+        }
+    </script>
+</body>
+</html>
