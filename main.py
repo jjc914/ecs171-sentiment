@@ -9,9 +9,9 @@ sys.path.insert(0, os.path.join(_ROOT, "models", "naive_bayes"))
 sys.path.insert(0, os.path.join(_ROOT, "models", "encoder_only"))
 sys.path.insert(0, os.path.join(_ROOT, "models", "lora_bert"))
 
-from naive_bayes import infer_nb, load_nb_model
-from encoder_only import infer_enc, load_enc_model
-from lora_bert import infer_bert, load_bert_model
+from naive_bayes_loader import infer_nb, load_nb_model
+from encoder_only_loader import infer_enc, load_enc_model
+from lora_bert_loader import infer_bert, load_bert_model
 
 app = Flask(__name__)
 nb_dict = None
